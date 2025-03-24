@@ -14,6 +14,7 @@ import {
 // Start registration process handler
 export const registerUserHandler = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
+        console.log("request.body", request.body)
         const userData = request.body as any;
 
         // Start verification process instead of immediate registration

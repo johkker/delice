@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  postgres:
+    container_name: delice-postgres
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_USER: delice
+      POSTGRES_PASSWORD: delice
+      POSTGRES_DB: delice
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - delice-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U delice"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    container_name: delice-pgadmin
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@delice.com
+      PGADMIN_DEFAULT_PASSWORD: delice
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - delice-network
+    restart: unless-stopped
+
+  # Add API service for full-stack setup (optional)
+  api:
+    container_name: delice-api
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env.docker
+    ports:
+      - "3333:3333"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+    networks:
+      - delice-network
+    restart: unless-stopped
+    command: npm run dev
+
+networks:
+  delice-network:
+    driver: bridge
+
+volumes:
+  postgres_data: 

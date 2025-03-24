@@ -53,8 +53,10 @@ const startServer = async () => {
 
     // Register plugins
     await app.register(fastifyCors, {
-        origin: true,
+        origin: true, // Allow all origins in development
         credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
     });
 
     await app.register(fastifyJwt, {
@@ -131,8 +133,12 @@ const startServer = async () => {
     process.on('SIGINT', () => closeGracefully('SIGINT'));
 
     try {
+        // Listen on all interfaces
         await app.listen({ port: PORT, host: '0.0.0.0' });
         console.log(`Server is running on port ${PORT}`);
+        console.log(`Server is accessible at http://localhost:${PORT}`);
+        console.log(`Server is accessible at http://0.0.0.0:${PORT}`);
+        console.log('CORS is enabled for all origins');
     } catch (error) {
         console.error('Error starting server:', error);
         process.exit(1);
