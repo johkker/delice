@@ -14,6 +14,8 @@ export type CreateUserData = {
     phone: string;
     document: string;
     roles?: UserRole[];
+    email_verified?: boolean;
+    phone_verified?: boolean;
 };
 
 export type UpdateUserData = Partial<Omit<CreateUserData, 'password' | 'email' | 'document' | 'phone'>>;

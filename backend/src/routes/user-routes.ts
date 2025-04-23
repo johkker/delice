@@ -7,7 +7,9 @@ import {
     initiatePhoneChangeHandler,
     initiatePasswordChangeHandler,
     verifyProfileChangeHandler,
-    resendProfileChangeCodeHandler
+    resendProfileChangeCodeHandler,
+    sendEmailVerificationHandler,
+    verifyEmailCodeHandler
 } from '@controllers/user-controller';
 import {
     UserProfileResponseSchema,
@@ -21,7 +23,10 @@ import {
     VerificationTokenResponseSchema,
     VerifyProfileChangeRequestSchema,
     ResendProfileChangeCodeRequestSchema,
-    SuccessResponseSchema
+    SuccessResponseSchema,
+    EmailVerificationSendResponseSchema,
+    EmailVerificationConfirmRequestSchema,
+    EmailVerificationConfirmResponseSchema
 } from '../schemas/user-schemas';
 import { requireAuth } from '../middlewares/auth-middleware';
 import { ErrorResponseSchema } from '../schemas/auth-schemas';
@@ -152,4 +157,32 @@ export const userRoutes = async (fastify: FastifyInstance) => {
         },
         preHandler: [requireAuth],
     }, changePasswordHandler);
+
+    // Email verification routes
+    fastify.post('/verify-email/send', {
+        schema: {
+            tags: ['User'],
+            description: 'Enviar código de verificação para o email do usuário autenticado',
+            response: {
+                200: EmailVerificationSendResponseSchema,
+                400: ErrorResponseSchema,
+            },
+        },
+        preHandler: [requireAuth],
+        handler: sendEmailVerificationHandler
+    });
+
+    fastify.post('/verify-email/confirm', {
+        schema: {
+            tags: ['User'],
+            description: 'Verificar código enviado para o email do usuário',
+            body: EmailVerificationConfirmRequestSchema,
+            response: {
+                200: EmailVerificationConfirmResponseSchema,
+                400: ErrorResponseSchema,
+            },
+        },
+        preHandler: [requireAuth],
+        handler: verifyEmailCodeHandler
+    });
 }; 

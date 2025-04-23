@@ -29,9 +29,9 @@ export const RegisterRequestSchema = Type.Object({
 export const RegisterResponseSchema = Type.Object({
     success: Type.Boolean(),
     data: Type.Object({
-        token: Type.String({ description: 'Token para verificação do cadastro' }),
+        token: Type.String({ description: 'Token de verificação para completar o cadastro' }),
         expiresIn: Type.Number({ description: 'Tempo de expiração em minutos' }),
-        message: Type.String({ description: 'Mensagem informativa sobre o processo de verificação' }),
+        message: Type.String({ description: 'Mensagem informativa' }),
     }),
 });
 

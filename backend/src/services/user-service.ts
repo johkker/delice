@@ -17,6 +17,10 @@ import {
     resendVerificationCode
 } from './profile-verification-service';
 
+import { setCacheData, getCacheData, deleteCacheData } from './cache-service';
+import { sendEmail } from './email-service';
+import crypto from 'crypto';
+
 config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -36,12 +40,20 @@ export type RegisterUserData = {
     phone: string;
     document: string;
     roles?: UserRole[];
+    email_verified?: boolean;
+    phone_verified?: boolean;
 };
 
 export type AuthResponse = {
     user: Omit<User, 'password'>;
     token: string;
 };
+
+// Type for the email verification data stored in Redis
+interface EmailVerificationData {
+    userId: string;
+    code: string;
+}
 
 // Helpers
 const generateUserToken = (user: User): string => {
@@ -63,39 +75,13 @@ const sanitizeUser = (user: User): Omit<User, 'password'> => {
 
 // Service functions
 export const registerUser = async (data: RegisterUserData): Promise<AuthResponse> => {
-    // Required fields validation
-    if (!data.name || !data.email || !data.password || !data.phone || !data.document) {
-        throw new Error('Todos os campos (nome, email, senha, telefone e documento) são obrigatórios');
-    }
 
-    // Email uniqueness validation
-    const existingUser = await findUserByEmail(data.email);
-    if (existingUser) {
-        throw new Error('Este email já está sendo usado por outro usuário');
-    }
-
-    // Phone uniqueness validation
-    const existingPhone = await findUserByPhone(data.phone);
-    if (existingPhone) {
-        throw new Error('Este telefone já está sendo usado por outro usuário');
-    }
-
-    // Document validation and uniqueness check
-    const formattedDocument = User.validateAndFormatDocument(data.document);
-    if (!formattedDocument) {
-        throw new Error('Documento inválido. Informe um CPF ou CNPJ válido.');
-    }
-
-    const existingDocument = await findUserByDocument(formattedDocument);
-    if (existingDocument) {
-        throw new Error('Este documento já está sendo usado por outro usuário');
-    }
-
+    // Hash the password
     const hashedPassword = await hash(data.password, SALT_ROUNDS);
 
+    // Create the user
     const newUser = await createUser({
         ...data,
-        document: formattedDocument,
         password: hashedPassword,
     });
 
@@ -291,4 +277,123 @@ export const isProfileChangeTokenValid = async (token: string): Promise<boolean>
 // Resend a profile change verification code
 export const resendProfileChangeCode = async (token: string): Promise<boolean> => {
     return await resendVerificationCode(token);
+};
+
+// Validates registration data without creating the user
+export const validateRegistrationData = async (data: RegisterUserData): Promise<RegisterUserData> => {
+    // Required fields validation
+    if (!data.name || !data.email || !data.password || !data.phone || !data.document) {
+        throw new Error('Todos os campos (nome, email, senha, telefone e documento) são obrigatórios');
+    }
+
+    // Email uniqueness validation
+    const existingUser = await findUserByEmail(data.email);
+    if (existingUser) {
+        throw new Error('Este email já está sendo usado por outro usuário');
+    }
+
+    // Phone uniqueness validation
+    const existingPhone = await findUserByPhone(data.phone);
+    if (existingPhone) {
+        throw new Error('Este telefone já está sendo usado por outro usuário');
+    }
+
+    // Document validation and uniqueness check
+    const formattedDocument = User.validateAndFormatDocument(data.document);
+    if (!formattedDocument) {
+        throw new Error('Documento inválido. Informe um CPF ou CNPJ válido.');
+    }
+
+    const existingDocument = await findUserByDocument(formattedDocument);
+    if (existingDocument) {
+        throw new Error('Este documento já está sendo usado por outro usuário');
+    }
+
+    // Return the validated data with formatted document
+    return {
+        ...data,
+        document: formattedDocument
+    };
+};
+
+// Send email verification code to user
+export const sendEmailVerificationCode = async (userId: string): Promise<void> => {
+    const user = await findUserById(userId);
+
+    if (!user) {
+        throw new Error('Usuário não encontrado');
+    }
+
+    if (user.email_verified) {
+        throw new Error('Email já foi verificado');
+    }
+
+    // Generate a verification code
+    const code = Math.floor(100000 + Math.random() * 900000).toString().substring(0, 6);
+
+    // Store code in Redis with user ID as the key
+    const verificationData: EmailVerificationData = { userId, code };
+    await setCacheData(`email-verify:user:${userId}`, verificationData, 10 * 60); // 10 minutes
+
+    // Prepare email content
+    const htmlContent = `
+    <html>
+      <body>
+        <h1>Verificação de Email - Delice</h1>
+        <p>Olá ${user.name},</p>
+        <p>Para verificar seu email na Delice, utilize o código de verificação abaixo:</p>
+        <div style="padding: 10px; background-color: #f5f5f5; font-size: 24px; text-align: center; letter-spacing: 5px; font-weight: bold;">
+          ${code}
+        </div>
+        <p>Este código expirará em 10 minutos.</p>
+        <p>Se você não solicitou esta verificação, por favor ignore este email.</p>
+        <p>Atenciosamente,<br>Equipe Delice</p>
+      </body>
+    </html>
+  `;
+
+    // In development mode, log the verification code instead of sending an email
+    if (process.env.NODE_ENV === 'development') {
+        console.log('\n=== EMAIL VERIFICATION CODE (DEVELOPMENT MODE) ===');
+        console.log(`To: ${user.email}`);
+        console.log(`Name: ${user.name}`);
+        console.log(`User ID: ${userId}`);
+        console.log(`Code: ${code}`);
+        console.log('=============================================\n');
+    } else {
+        // In production, send the actual email
+        await sendEmail(
+            { email: user.email, name: user.name },
+            {
+                subject: 'Verificação de Email - Delice',
+                htmlContent,
+            }
+        );
+    }
+};
+
+// Verify email using verification code
+export const verifyUserEmail = async (userId: string, code: string): Promise<boolean> => {
+    // Retrieve verification data for this user
+    const data = await getCacheData<EmailVerificationData>(`email-verify:user:${userId}`);
+
+    if (!data || data.code !== code) {
+        return false;
+    }
+
+    // Update user email verification status
+    const user = await findUserById(userId);
+    if (!user) {
+        return false;
+    }
+
+    // Update email verification status
+    await updateUser(userId, {
+        email_verified: true
+    } as any);
+
+    // Remove verification code from Redis
+    await deleteCacheData(`email-verify:user:${userId}`);
+
+    return true;
 }; 

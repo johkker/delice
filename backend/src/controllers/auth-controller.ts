@@ -1,47 +1,42 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { authenticateUser, registerUser } from '@services/user-service';
+import { authenticateUser, registerUser, validateRegistrationData, sendEmailVerificationCode, RegisterUserData } from '@services/user-service';
 import {
     startVerification,
     verifyEmailCode,
     verifyPhoneCode,
-    isRegistrationVerified,
     getVerifiedRegistration,
     resendVerificationCodes,
     isValidToken,
-    isVerificationCompleted
+    isVerificationCompleted,
+    isRegistrationVerified
 } from '@services/verification-service';
 
-// Start registration process handler
-export const registerUserHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+// Register handler
+export const registerHandler = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-        console.log("request.body", request.body)
-        const userData = request.body as any;
+        const userData = request.body as RegisterUserData;
 
-        // Start verification process instead of immediate registration
-        const verificationToken = await startVerification(userData);
+        // Validate registration data
+        const validatedData = await validateRegistrationData(userData);
+
+        // Start verification process for phone only
+        const token = await startVerification(validatedData);
 
         return {
             success: true,
             data: {
-                token: verificationToken,
-                expiresIn: 10, // 10 minutes expiration
-                message: "Códigos de verificação enviados. Verifique seu telefone para completar o cadastro e seu email para confirmar seu endereço de email."
-            },
+                token,
+                expiresIn: 10, // 10 minutes
+                message: 'Código de verificação enviado para seu telefone. Verifique seu telefone para completar o cadastro.'
+            }
         };
     } catch (error) {
-        const originalMessage = error instanceof Error ? error.message : 'Ocorreu um erro';
-        let message = originalMessage;
-
-        // Translate common error messages
-        if (originalMessage === 'User with this email already exists') {
-            message = 'Este email já está sendo usado por outro usuário';
-        }
-
+        const message = error instanceof Error ? error.message : 'Ocorreu um erro inesperado';
         return reply.status(400).send({
             success: false,
             error: {
-                message,
-            },
+                message
+            }
         });
     }
 };
@@ -80,12 +75,11 @@ export const verifyEmailHandler = async (request: FastifyRequest, reply: Fastify
             return reply.status(400).send({
                 success: false,
                 error: {
-                    message: 'Código de verificação do email inválido',
+                    message: 'Código de verificação de email inválido',
                 },
             });
         }
 
-        // Email verification is successful
         return {
             success: true,
             message: 'Email verificado com sucesso',
@@ -109,14 +103,13 @@ export const verifyPhoneHandler = async (request: FastifyRequest, reply: Fastify
     try {
         const { token, code } = request.body as { token: string; code: string };
 
-        // Check if token is valid
-        const isTokenValid = await isValidToken(token);
-        if (!isTokenValid) {
+        // Check if the token is valid
+        if (!(await isValidToken(token))) {
             return reply.status(400).send({
                 success: false,
                 error: {
-                    message: 'Token de verificação expirado ou inválido',
-                },
+                    message: 'Token de verificação expirado ou inválido'
+                }
             });
         }
 
@@ -131,49 +124,73 @@ export const verifyPhoneHandler = async (request: FastifyRequest, reply: Fastify
             };
         }
 
-        // Verify phone code
-        const isPhoneVerified = await verifyPhoneCode(token, code);
-
-        if (!isPhoneVerified) {
+        // Verify the phone code
+        const verified = await verifyPhoneCode(token, code);
+        if (!verified) {
             return reply.status(400).send({
                 success: false,
                 error: {
-                    message: 'Código de verificação do telefone inválido',
-                },
+                    message: 'Código de verificação do telefone inválido'
+                }
             });
         }
 
-        // Phone verification is successful - auto-register the user
-        const userData = await getVerifiedRegistration(token);
+        // Check if registration is ready for completion (phone verification is now complete)
+        const isRegistrationReady = await isRegistrationVerified(token);
+        if (isRegistrationReady) {
+            // Get verified registration data
+            const userData = await getVerifiedRegistration(token);
+            if (!userData) {
+                return reply.status(400).send({
+                    success: false,
+                    error: {
+                        message: 'Dados de registro inválidos ou expirados'
+                    }
+                });
+            }
 
-        if (!userData) {
-            return reply.status(400).send({
-                success: false,
-                error: {
-                    message: 'Dados de cadastro não encontrados ou já utilizados',
-                },
+            // Register the user
+            const isEmailVerified = await isVerificationCompleted(token, 'email');
+            const authResponse = await registerUser({
+                ...userData,
+                phone_verified: true, // Phone is verified since we're here
+                email_verified: isEmailVerified // Email may or may not be verified
             });
+
+            // Send email verification code if email is not verified yet
+            if (!isEmailVerified) {
+                try {
+                    await sendEmailVerificationCode(authResponse.user.id);
+                } catch (error) {
+                    // Log error but don't fail the registration
+                    console.error('Error sending email verification code:', error);
+                }
+            }
+
+            return {
+                success: true,
+                message: 'Telefone verificado com sucesso. Cadastro realizado!',
+                phoneVerified: true,
+                emailVerified: isEmailVerified,
+                user: authResponse.user,
+                token: authResponse.token
+            };
         }
 
-        // Complete the registration process
-        const result = await registerUser(userData);
-
+        // If we get here, phone verification was successful but something else went wrong
         return {
             success: true,
-            message: 'Telefone verificado com sucesso. Cadastro realizado!',
+            message: 'Telefone verificado com sucesso',
             phoneVerified: true,
-            emailVerified: await isVerificationCompleted(token, 'email'),
-            user: result.user,
-            token: result.token
+            emailVerified: await isVerificationCompleted(token, 'email')
         };
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Ocorreu um erro durante a verificação';
-
         return reply.status(400).send({
             success: false,
             error: {
-                message,
-            },
+                message
+            }
         });
     }
 };

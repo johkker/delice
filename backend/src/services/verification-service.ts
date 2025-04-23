@@ -32,9 +32,8 @@ const generateRegistrationToken = (): string => {
 };
 
 // Start the registration verification process
-export const startVerification = async (userData: RegisterUserData): Promise<string> => {
-    // Generate verification codes
-    const emailCode = generateVerificationCode();
+export const startVerification = async (validatedData: RegisterUserData): Promise<string> => {
+    // Generate verification code for phone only
     const phoneCode = generateVerificationCode();
 
     // Generate a token for this registration
@@ -42,8 +41,8 @@ export const startVerification = async (userData: RegisterUserData): Promise<str
 
     // Store the pending registration in Redis
     const pendingRegistration: PendingRegistration = {
-        userData,
-        emailCode,
+        userData: validatedData,
+        emailCode: '', // No email code generated at registration time
         phoneCode,
         emailVerified: false,
         phoneVerified: false,
@@ -53,11 +52,19 @@ export const startVerification = async (userData: RegisterUserData): Promise<str
     // Set in Redis with 10-minute expiration
     await setCacheData(`${REDIS_PREFIX}${token}`, pendingRegistration, EXPIRATION_TIME);
 
-    // Send verification email
-    await sendVerificationEmail(userData.email, userData.name, emailCode);
-
-    // Send verification SMS
-    await sendVerificationSMS(userData.phone, phoneCode, userData.name);
+    // In development mode, log the verification codes instead of sending SMS
+    if (process.env.NODE_ENV === 'development') {
+        console.log('\n=== REGISTRATION VERIFICATION CODES (DEVELOPMENT MODE) ===');
+        console.log(`User: ${validatedData.name} (${validatedData.email})`);
+        console.log(`Phone: ${validatedData.phone}`);
+        console.log(`Token: ${token}`);
+        console.log(`Phone Code: ${phoneCode}`);
+        console.log('====================================================\n');
+    } else {
+        // In production, send actual verification messages
+        // Send verification SMS only
+        await sendVerificationSMS(validatedData.phone, phoneCode, validatedData.name);
+    }
 
     return token;
 };

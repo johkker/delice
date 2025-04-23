@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import {
-    registerUserHandler,
+    registerHandler,
     loginHandler,
     verifyEmailHandler,
     verifyPhoneHandler,
@@ -25,21 +25,21 @@ export const authRoutes = async (fastify: FastifyInstance) => {
     fastify.post('/register', {
         schema: {
             tags: ['Authentication'],
-            description: 'Inicia o processo de registro com envio de códigos de verificação por email e telefone',
+            description: 'Inicia o processo de registro com envio de código de verificação para o telefone',
             body: RegisterRequestSchema,
             response: {
                 200: RegisterResponseSchema,
                 400: ErrorResponseSchema,
             },
         },
-        handler: registerUserHandler
+        handler: registerHandler
     });
 
-    // Verify email code
+    // Verify email code during registration
     fastify.post('/verify-email', {
         schema: {
             tags: ['Authentication'],
-            description: 'Verifica o código enviado para o email (opcional para registro)',
+            description: 'Verifica o código enviado para o email durante o processo de registro inicial (opcional)',
             body: VerifyEmailRequestSchema,
             response: {
                 200: VerificationResponseSchema,

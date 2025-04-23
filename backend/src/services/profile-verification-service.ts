@@ -79,8 +79,17 @@ export const startEmailChangeVerification = async (
         EXPIRATION_TIME
     );
 
-    // Send verification email to the NEW email
-    await sendEmailChangeVerification(newEmail, code);
+    // In development mode, log the verification code instead of sending an email
+    if (process.env.NODE_ENV === 'development') {
+        console.log('\n=== EMAIL CHANGE VERIFICATION CODE (DEVELOPMENT MODE) ===');
+        console.log(`New Email: ${newEmail}`);
+        console.log(`Token: ${token}`);
+        console.log(`Code: ${code}`);
+        console.log('=====================================================\n');
+    } else {
+        // In production, send the actual verification email
+        await sendEmailChangeVerification(newEmail, code);
+    }
 
     return token;
 };
@@ -138,8 +147,17 @@ export const startPhoneChangeVerification = async (
         EXPIRATION_TIME
     );
 
-    // Send verification SMS to the NEW phone
-    await sendVerificationSMS(newPhone, code);
+    // In development mode, log the verification code instead of sending an SMS
+    if (process.env.NODE_ENV === 'development') {
+        console.log('\n=== PHONE CHANGE VERIFICATION CODE (DEVELOPMENT MODE) ===');
+        console.log(`New Phone: ${newPhone}`);
+        console.log(`Token: ${token}`);
+        console.log(`Code: ${code}`);
+        console.log('=====================================================\n');
+    } else {
+        // In production, send the actual verification SMS
+        await sendVerificationSMS(newPhone, code);
+    }
 
     return token;
 };
@@ -168,8 +186,17 @@ export const startPasswordChangeVerification = async (
         EXPIRATION_TIME
     );
 
-    // Send verification email for password change
-    await sendPasswordChangeVerification(userEmail, code);
+    // In development mode, log the verification code instead of sending an email
+    if (process.env.NODE_ENV === 'development') {
+        console.log('\n=== PASSWORD CHANGE VERIFICATION CODE (DEVELOPMENT MODE) ===');
+        console.log(`Email: ${userEmail}`);
+        console.log(`Token: ${token}`);
+        console.log(`Code: ${code}`);
+        console.log('=======================================================\n');
+    } else {
+        // In production, send verification email for password change
+        await sendPasswordChangeVerification(userEmail, code);
+    }
 
     return token;
 };

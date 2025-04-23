@@ -8,7 +8,9 @@ import {
     initiatePasswordChange,
     verifyProfileChange,
     isProfileChangeTokenValid,
-    resendProfileChangeCode
+    resendProfileChangeCode,
+    sendEmailVerificationCode,
+    verifyUserEmail
 } from '@services/user-service';
 
 // Get user profile handler
@@ -236,6 +238,65 @@ export const changePasswordHandler = async (request: FastifyRequest, reply: Fast
         } else if (originalMessage === 'Current password is incorrect') {
             message = 'A senha atual está incorreta';
         }
+
+        return reply.status(400).send({
+            success: false,
+            error: {
+                message,
+            },
+        });
+    }
+};
+
+// Send email verification code handler
+export const sendEmailVerificationHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+        const userId = (request.user as any).id;
+
+        // Send verification code
+        await sendEmailVerificationCode(userId);
+
+        return {
+            success: true,
+            message: 'Código de verificação enviado para o seu email',
+            expiresIn: 10 // 10 minutes
+        };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ocorreu um erro ao enviar o código de verificação';
+
+        return reply.status(400).send({
+            success: false,
+            error: {
+                message,
+            },
+        });
+    }
+};
+
+// Verify email code handler
+export const verifyEmailCodeHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+        const userId = (request.user as any).id;
+        const { code } = request.body as { code: string };
+
+        // Verify the code
+        const isVerified = await verifyUserEmail(userId, code);
+
+        if (!isVerified) {
+            return reply.status(400).send({
+                success: false,
+                error: {
+                    message: 'Código de verificação inválido ou expirado',
+                },
+            });
+        }
+
+        return {
+            success: true,
+            message: 'Email verificado com sucesso',
+        };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ocorreu um erro ao verificar o email';
 
         return reply.status(400).send({
             success: false,

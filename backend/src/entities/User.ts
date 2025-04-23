@@ -33,6 +33,12 @@ export class User {
     @Column({ type: 'text', unique: true })
     document: string;
 
+    @Column({ default: false })
+    email_verified: boolean;
+
+    @Column({ default: false })
+    phone_verified: boolean;
+
     @Column({
         type: 'enum',
         enum: UserRole,

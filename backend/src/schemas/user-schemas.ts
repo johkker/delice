@@ -1,5 +1,4 @@
 import { Type } from '@sinclair/typebox';
-import { ErrorResponseSchema } from './auth-schemas';
 
 // User profile schema
 export const UserProfileSchema = Type.Object({
@@ -16,9 +15,15 @@ export const UserProfileSchema = Type.Object({
     updated_at: Type.String(),
 });
 
+export const UserProfileSchemaWithVerification = Type.Object({
+    ...UserProfileSchema.properties,
+    email_verified: Type.Boolean(),
+    phone_verified: Type.Boolean(),
+});
+
 export const UserProfileResponseSchema = Type.Object({
     success: Type.Boolean(),
-    data: UserProfileSchema,
+    data: UserProfileSchemaWithVerification,
 });
 
 // Update profile schema
@@ -84,6 +89,22 @@ export const ChangePasswordRequestSchema = Type.Object({
 });
 
 export const ChangePasswordResponseSchema = Type.Object({
+    success: Type.Boolean(),
+    message: Type.String(),
+});
+
+// Email verification schemas
+export const EmailVerificationSendResponseSchema = Type.Object({
+    success: Type.Boolean(),
+    message: Type.String({ description: 'Mensagem informativa' }),
+    expiresIn: Type.Number({ description: 'Tempo de expiração em minutos' })
+});
+
+export const EmailVerificationConfirmRequestSchema = Type.Object({
+    code: Type.String({ description: 'Código de verificação recebido por email' }),
+});
+
+export const EmailVerificationConfirmResponseSchema = Type.Object({
     success: Type.Boolean(),
     message: Type.String(),
 }); 

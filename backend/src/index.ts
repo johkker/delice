@@ -9,6 +9,7 @@ import { AppDataSource } from '@config/data-source';
 import { errorHandler } from './middlewares/error-handler';
 import { authRoutes } from '@routes/auth-routes';
 import { userRoutes } from '@routes/user-routes';
+import { searchRoutes } from '@routes/search-routes';
 import redisClient, { isRedisConnected, disconnectRedis } from './services/cache-service';
 
 config();
@@ -99,6 +100,7 @@ const startServer = async () => {
     // Register routes
     app.register(authRoutes, { prefix: '/api/auth' });
     app.register(userRoutes, { prefix: '/api/users' });
+    app.register(searchRoutes, { prefix: '/api' });
 
     // Root route for API status
     app.get('/', async () => {
